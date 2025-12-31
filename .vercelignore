@@ -1,0 +1,8 @@
+# Ignore durante o deploy do Vercel
+.env
+.env.local
+.env*.local
+node_modules
+.next
+.vscode
+.idea

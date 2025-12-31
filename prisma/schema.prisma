@@ -1,0 +1,149 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// === ENUMS ===
+
+enum StatusTroca {
+  ORCAMENTO
+  ORCAMENTO_APROVADO
+  RASCUNHO_NF_VALIDACAO
+  NF_EMITIDA_AGUARDANDO_DESTINO
+  AGUARDANDO_RETIRADA
+  REPOSICAO_PARCIAL
+  AGUARDANDO_DESCONTO
+  TROCA_RESOLVIDA
+  ITEM_DESCARTADO
+  PROBLEMA_DIVERGENCIA
+}
+
+enum TipoCompensacao {
+  REPOSICAO_PRODUTO
+  DESCONTO
+}
+
+// === MODELS ===
+
+model Fornecedor {
+  id        String   @id @default(cuid())
+  nome      String
+  contato   String?
+  email     String?
+  telefone  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trocas Troca[]
+}
+
+model Troca {
+  id              String           @id @default(cuid())
+  fornecedorId    String
+  fornecedor      Fornecedor       @relation(fields: [fornecedorId], references: [id])
+  statusAtual     StatusTroca      @default(ORCAMENTO)
+  tipoCompensacao TipoCompensacao?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  itens       ItemDefeito[]
+  orcamento   Orcamento?
+  rascunhoNF  RascunhoNF?
+  nfDevolucao NFDevolucao?
+  destinoItem DestinoItem?
+  reposicao   Reposicao?
+  desconto    Desconto?
+  historico   HistoricoTroca[]
+}
+
+model ItemDefeito {
+  id            String  @id @default(cuid())
+  trocaId       String
+  troca         Troca   @relation(fields: [trocaId], references: [id], onDelete: Cascade)
+  codigoItem    String
+  descricao     String
+  quantidade    Int
+  valorUnitario Decimal @db.Decimal(10, 2)
+  valorTotal    Decimal @db.Decimal(10, 2)
+}
+
+model Orcamento {
+  id                String    @id @default(cuid())
+  trocaId           String    @unique
+  troca             Troca     @relation(fields: [trocaId], references: [id], onDelete: Cascade)
+  valorTotal        Decimal   @db.Decimal(10, 2)
+  enviadoFornecedor Boolean   @default(false)
+  aprovado          Boolean   @default(false)
+  dataEnvio         DateTime?
+}
+
+model RascunhoNF {
+  id                 String    @id @default(cuid())
+  trocaId            String    @unique
+  troca              Troca     @relation(fields: [trocaId], references: [id], onDelete: Cascade)
+  rascunhoGerado     Boolean   @default(false)
+  numeroRascunho     String?
+  aprovadoFornecedor Boolean   @default(false)
+  dataCriacao        DateTime?
+}
+
+model NFDevolucao {
+  id             String    @id @default(cuid())
+  trocaId        String    @unique
+  troca          Troca     @relation(fields: [trocaId], references: [id], onDelete: Cascade)
+  nfEmitida      Boolean   @default(false)
+  numeroNF       String?
+  dataEmissao    DateTime?
+  valorNF        Decimal?  @db.Decimal(10, 2)
+  produtoEnviado Boolean   @default(false)
+  dataEnvio      DateTime?
+}
+
+model DestinoItem {
+  id                 String    @id @default(cuid())
+  trocaId            String    @unique
+  troca              Troca     @relation(fields: [trocaId], references: [id], onDelete: Cascade)
+  fornecedorRetirara Boolean   @default(false)
+  coletaRealizada    Boolean   @default(false)
+  dataColeta         DateTime?
+  descarte           Boolean   @default(false)
+  dataDescarte       DateTime?
+}
+
+model Reposicao {
+  id                String    @id @default(cuid())
+  trocaId           String    @unique
+  troca             Troca     @relation(fields: [trocaId], references: [id], onDelete: Cascade)
+  nfEntrada         String?
+  dataChegada       DateTime?
+  valorAcordado     Decimal?  @db.Decimal(10, 2)
+  valorRecebido     Decimal?  @db.Decimal(10, 2)
+  reposicaoCompleta Boolean   @default(false)
+}
+
+model Desconto {
+  id               String    @id @default(cuid())
+  trocaId          String    @unique
+  troca            Troca     @relation(fields: [trocaId], references: [id], onDelete: Cascade)
+  valorDesconto    Decimal?  @db.Decimal(10, 2)
+  boletoGerado     Boolean   @default(false)
+  dataBoleto       DateTime?
+  descontoAplicado Boolean   @default(false)
+}
+
+model HistoricoTroca {
+  id          String   @id @default(cuid())
+  trocaId     String
+  troca       Troca    @relation(fields: [trocaId], references: [id], onDelete: Cascade)
+  campo       String
+  valorAntigo String?
+  valorNovo   String?
+  createdAt   DateTime @default(now())
+}
