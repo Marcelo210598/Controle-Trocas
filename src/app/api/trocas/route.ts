@@ -5,7 +5,7 @@ import { StatusTroca, TipoCompensacao } from '@prisma/client'
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
-        const status = searchParams.get('status') as StatusTroca | null
+        const status = searchParams.get('status')
         const fornecedorId = searchParams.get('fornecedorId')
         const dataInicio = searchParams.get('dataInicio')
         const dataFim = searchParams.get('dataFim')
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
         }
 
         if (status && status !== 'all') {
-            where.statusAtual = status
+            where.statusAtual = status as StatusTroca
         }
 
         if (fornecedorId && fornecedorId !== 'all') {
