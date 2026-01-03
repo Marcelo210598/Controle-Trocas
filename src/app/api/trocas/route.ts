@@ -9,14 +9,24 @@ export async function GET(request: Request) {
         const fornecedorId = searchParams.get('fornecedorId')
         const dataInicio = searchParams.get('dataInicio')
         const dataFim = searchParams.get('dataFim')
+        const filtroEspecial = searchParams.get('filtroEspecial') // 'atrasadas', 'em_andamento', 'resolvidas'
 
         const where: Record<string, unknown> = {}
 
-        if (status) {
+        // Filtros especiais
+        if (filtroEspecial === 'atrasadas') {
+            where.alertaAtrasada = true
+        } else if (filtroEspecial === 'em_andamento') {
+            where.statusAtual = { not: 'TROCA_RESOLVIDA' }
+        } else if (filtroEspecial === 'resolvidas') {
+            where.statusAtual = 'TROCA_RESOLVIDA'
+        }
+
+        if (status && status !== 'all') {
             where.statusAtual = status
         }
 
-        if (fornecedorId) {
+        if (fornecedorId && fornecedorId !== 'all') {
             where.fornecedorId = fornecedorId
         }
 
@@ -40,7 +50,20 @@ export async function GET(request: Request) {
             orderBy: { updatedAt: 'desc' },
         })
 
-        return NextResponse.json(trocas)
+        // Calcular alertaAtrasada para cada troca
+        const trocasComAlerta = trocas.map((troca) => {
+            const alertaAtrasada =
+                troca.statusAtual !== 'TROCA_RESOLVIDA' &&
+                troca.prazoAlertalAtual &&
+                new Date() > new Date(troca.prazoAlertalAtual)
+
+            return {
+                ...troca,
+                alertaAtrasada,
+            }
+        })
+
+        return NextResponse.json(trocasComAlerta)
     } catch (error) {
         console.error('Error fetching trocas:', error)
         return NextResponse.json({ error: 'Erro ao buscar trocas' }, { status: 500 })
@@ -60,11 +83,23 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Pelo menos um item é obrigatório' }, { status: 400 })
         }
 
+        // Calcular prazo inicial de alerta (15 dias)
+        const prazoInicial = new Date()
+        prazoInicial.setDate(prazoInicial.getDate() + 15)
+
+        // Calcular valor total
+        const valorTotal = orcamento?.valorTotal || 0
+
         const troca = await prisma.troca.create({
             data: {
                 fornecedorId,
                 tipoCompensacao: tipoCompensacao as TipoCompensacao | undefined,
                 statusAtual: 'ORCAMENTO',
+                prazoAlertalAtual: prazoInicial,
+                alertaAtrasada: false,
+                valorTotal,
+                valorRecuperado: 0,
+                valorPendente: valorTotal,
                 itens: {
                     create: itens.map((item: { codigoItem: string; descricao: string; quantidade: number; valorUnitario: number }) => ({
                         codigoItem: item.codigoItem,

@@ -90,3 +90,42 @@ export function formatDateTime(date: Date | string | null | undefined): string {
         minute: '2-digit',
     }).format(d)
 }
+
+// Funções para controle de prazo e alerta
+export function calcularDiasAtraso(prazoAlertalAtual: Date | string | null): number {
+    if (!prazoAlertalAtual) return 0
+    const prazo = typeof prazoAlertalAtual === 'string' ? new Date(prazoAlertalAtual) : prazoAlertalAtual
+    const hoje = new Date()
+    const diffTime = hoje.getTime() - prazo.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays > 0 ? diffDays : 0
+}
+
+export function verificarTrocaAtrasada(
+    prazoAlertalAtual: Date | string | null,
+    statusAtual: string
+): boolean {
+    // Trocas resolvidas nunca estão atrasadas
+    if (statusAtual === 'TROCA_RESOLVIDA') return false
+    if (!prazoAlertalAtual) return false
+
+    const diasAtraso = calcularDiasAtraso(prazoAlertalAtual)
+    return diasAtraso > 0
+}
+
+export function calcularProximoPrazo(
+    prazoAtual: Date | string,
+    diasAdicionados: number
+): Date {
+    const prazo = typeof prazoAtual === 'string' ? new Date(prazoAtual) : new Date(prazoAtual)
+    const novoPrazo = new Date(prazo)
+    novoPrazo.setDate(novoPrazo.getDate() + diasAdicionados)
+    return novoPrazo
+}
+
+export function calcularPrazoInicial(): Date {
+    const hoje = new Date()
+    const prazoInicial = new Date(hoje)
+    prazoInicial.setDate(prazoInicial.getDate() + 15)
+    return prazoInicial
+}

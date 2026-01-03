@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { StatusGrid } from '@/components/dashboard/StatusGrid'
+import { FinancialChart } from '@/components/dashboard/FinancialChart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Package, TrendingUp, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Package, TrendingUp, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 
 interface DashboardStats {
   total: number
@@ -14,9 +16,11 @@ interface DashboardStats {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [trocasAtrasadas, setTrocasAtrasadas] = useState(0)
 
   useEffect(() => {
     fetchStats()
+    fetchTrocasAtrasadas()
   }, [])
 
   const fetchStats = async () => {
@@ -28,6 +32,16 @@ export default function DashboardPage() {
       console.error('Error fetching stats:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchTrocasAtrasadas = async () => {
+    try {
+      const res = await fetch('/api/trocas?filtroEspecial=atrasadas')
+      const data = await res.json()
+      setTrocasAtrasadas(data.length)
+    } catch (error) {
+      console.error('Error fetching trocas atrasadas:', error)
     }
   }
 
@@ -52,7 +66,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -116,7 +130,28 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        <Link href="/trocas?filtroEspecial=atrasadas" className="cursor-pointer">
+          <Card className="bg-gradient-to-br from-purple-500 to-pink-600 text-white hover:scale-105 transition-transform">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm opacity-80">Atrasadas</p>
+                  {loading ? (
+                    <Skeleton className="h-8 w-16 bg-white/20" />
+                  ) : (
+                    <p className="text-3xl font-bold">{trocasAtrasadas}</p>
+                  )}
+                </div>
+                <Clock className="h-10 w-10 opacity-80 animate-pulse" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
+
+      {/* Financial Chart */}
+      <FinancialChart />
 
       {/* Status Grid */}
       <Card>

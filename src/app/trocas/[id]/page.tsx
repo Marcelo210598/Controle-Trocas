@@ -3,8 +3,10 @@
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { StatusTroca, TipoCompensacao } from '@prisma/client'
-import { STATUS_CONFIG, TIPO_COMPENSACAO_CONFIG, formatCurrency, formatDate, formatDateTime } from '@/lib/types'
+import { STATUS_CONFIG, TIPO_COMPENSACAO_CONFIG, formatCurrency, formatDate, formatDateTime, calcularDiasAtraso } from '@/lib/types'
 import { StatusBadge } from '@/components/trocas/StatusBadge'
+import { AlertBadge } from '@/components/trocas/AlertBadge'
+import { ProrrogarPrazoSheet } from '@/components/trocas/ProrrogarPrazoSheet'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -40,6 +42,12 @@ interface TrocaDetail {
     tipoCompensacao: TipoCompensacao | null
     createdAt: string
     updatedAt: string
+    prazoAlertalAtual: string | null
+    alertaAtrasada: boolean
+    dataFinalizacao: string | null
+    valorTotal: string
+    valorRecuperado: string
+    valorPendente: string
     itens: Array<{
         id: string
         codigoItem: string
@@ -198,6 +206,27 @@ export default function TrocaDetalhePage({ params }: { params: Promise<{ id: str
 
     const marcarDescarte = () =>
         handleAction(`/api/trocas/${resolvedParams.id}/destino`, 'PATCH', { descarte: true })
+
+    const finalizarTroca = async () => {
+        setActionLoading(true)
+        try {
+            const res = await fetch(`/api/trocas/${resolvedParams.id}/finalizar`, {
+                method: 'POST',
+            })
+            const data = await res.json()
+            if (!res.ok) {
+                toast.error(data.error || 'Erro ao finalizar troca')
+            } else {
+                toast.success('Troca finalizada com sucesso!')
+                await fetchTroca()
+            }
+        } catch (error) {
+            console.error('Error:', error)
+            toast.error('Erro ao finalizar troca')
+        } finally {
+            setActionLoading(false)
+        }
+    }
 
     if (loading) {
         return (
@@ -559,6 +588,16 @@ export default function TrocaDetalhePage({ params }: { params: Promise<{ id: str
         { value: 'historico', label: 'Histórico', icon: History, content: <HistoricoTab /> },
     ]
 
+    const podeFinalizarTroca =
+        troca.nfDevolucao?.nfEmitida &&
+        (troca.destinoItem?.coletaRealizada || troca.destinoItem?.descarte) &&
+        troca.tipoCompensacao &&
+        ((troca.tipoCompensacao === 'REPOSICAO_PRODUTO' && troca.reposicao?.reposicaoCompleta) ||
+            (troca.tipoCompensacao === 'DESCONTO' && troca.desconto?.descontoAplicado)) &&
+        troca.statusAtual !== 'TROCA_RESOLVIDA'
+
+    const diasAtraso = troca.prazoAlertalAtual ? calcularDiasAtraso(troca.prazoAlertalAtual) : 0
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -572,12 +611,67 @@ export default function TrocaDetalhePage({ params }: { params: Promise<{ id: str
                             {troca.itens[0]?.codigoItem || 'Troca'}
                         </h1>
                         <StatusBadge status={troca.statusAtual} />
+                        <AlertBadge prazoAlertalAtual={troca.prazoAlertalAtual} statusAtual={troca.statusAtual} />
                     </div>
                     <p className="text-gray-500 mt-1">
                         {troca.fornecedor.nome} • Criada em {formatDate(troca.createdAt)}
                     </p>
+                    {troca.dataFinalizacao && (
+                        <p className="text-green-600 text-sm font-medium mt-1">
+                            ✓ Finalizada em {formatDate(troca.dataFinalizacao)}
+                        </p>
+                    )}
                 </div>
             </div>
+
+            {/* Alerta e Controlo de Prazo */}
+            {troca.statusAtual !== 'TROCA_RESOLVIDA' && troca.prazoAlertalAtual && (
+                <Card className={diasAtraso > 0 ? 'border-red-200 bg-red-50' : 'border-blue-200 bg-blue-50'}>
+                    <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Clock className={`h-5 w-5 ${diasAtraso > 0 ? 'text-red-600' : 'text-blue-600'}`} />
+                                    <h3 className={`font-semibold ${diasAtraso > 0 ? 'text-red-900' : 'text-blue-900'}`}>
+                                        {diasAtraso > 0 ? 'Troca Atrasada!' : 'Prazo de Alerta'}
+                                    </h3>
+                                </div>
+                                <p className={`text-sm ${diasAtraso > 0 ? 'text-red-700' : 'text-blue-700'}`}>
+                                    {diasAtraso > 0
+                                        ? `Esta troca está ${diasAtraso} dia(s) atrasada desde ${formatDate(troca.prazoAlertalAtual)}`
+                                        : `Prazo atual: ${formatDate(troca.prazoAlertalAtual)}`
+                                    }
+                                </p>
+                            </div>
+                            <ProrrogarPrazoSheet
+                                trocaId={troca.id}
+                                prazoAtual={troca.prazoAlertalAtual}
+                                onProrrogado={fetchTroca}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Controle Financeiro */}
+            <Card className="border-green-200 bg-green-50">
+                <CardContent className="p-4">
+                    <div className="grid grid-cols-3 gap-4">
+                        <div>
+                            <p className="text-xs text-green-700">Valor Total</p>
+                            <p className="text-lg font-bold text-green-900">{formatCurrency(troca.valorTotal)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-green-700">Recuperado</p>
+                            <p className="text-lg font-bold text-green-900">{formatCurrency(troca.valorRecuperado)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-green-700">Pendente</p>
+                            <p className="text-lg font-bold text-green-900">{formatCurrency(troca.valorPendente)}</p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Items Summary */}
             <Card>
@@ -643,6 +737,31 @@ export default function TrocaDetalhePage({ params }: { params: Promise<{ id: str
                             </TabsContent>
                         ))}
                     </Tabs>
+                </Card>
+            )}
+
+            {/* Botão de Finalização */}
+            {podeFinalizarTroca && (
+                <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <h3 className="font-semibold text-green-900 mb-1">Pronto para Finalizar</h3>
+                                <p className="text-sm text-green-700">
+                                    Todas as etapas foram concluídas. Você pode finalizar esta troca agora.
+                                </p>
+                            </div>
+                            <Button
+                                onClick={finalizarTroca}
+                                disabled={actionLoading}
+                                className="bg-green-600 hover:bg-green-700 whitespace-nowrap"
+                                size="lg"
+                            >
+                                <CheckCircle className="h-5 w-5 mr-2" />
+                                Finalizar Troca
+                            </Button>
+                        </div>
+                    </CardContent>
                 </Card>
             )}
         </div>

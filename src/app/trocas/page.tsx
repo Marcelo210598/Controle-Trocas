@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { StatusTroca } from '@prisma/client'
 import { STATUS_CONFIG, formatCurrency, formatDate } from '@/lib/types'
 import { StatusBadge } from '@/components/trocas/StatusBadge'
+import { AlertBadge } from '@/components/trocas/AlertBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -42,6 +43,8 @@ interface Troca {
     tipoCompensacao: string | null
     createdAt: string
     updatedAt: string
+    prazoAlertalAtual: string | null
+    alertaAtrasada: boolean
     itens: Array<{ codigoItem: string; descricao: string; valorTotal: string }>
     orcamento: { valorTotal: string } | null
 }
@@ -68,6 +71,9 @@ function TrocasContent() {
         searchParams.get('dataInicio') || ''
     )
     const [dataFim, setDataFim] = useState<string>(searchParams.get('dataFim') || '')
+    const [filtroEspecial, setFiltroEspecial] = useState<string>(
+        searchParams.get('filtroEspecial') || ''
+    )
 
     useEffect(() => {
         fetchFornecedores()
@@ -75,7 +81,7 @@ function TrocasContent() {
 
     useEffect(() => {
         fetchTrocas()
-    }, [status, fornecedorId, dataInicio, dataFim])
+    }, [status, fornecedorId, dataInicio, dataFim, filtroEspecial])
 
     const fetchFornecedores = async () => {
         try {
@@ -95,6 +101,7 @@ function TrocasContent() {
             if (fornecedorId) params.set('fornecedorId', fornecedorId)
             if (dataInicio) params.set('dataInicio', dataInicio)
             if (dataFim) params.set('dataFim', dataFim)
+            if (filtroEspecial) params.set('filtroEspecial', filtroEspecial)
 
             const res = await fetch(`/api/trocas?${params.toString()}`)
             const data = await res.json()
@@ -111,13 +118,45 @@ function TrocasContent() {
         setFornecedorId('')
         setDataInicio('')
         setDataFim('')
+        setFiltroEspecial('')
         router.push('/trocas')
     }
 
-    const hasFilters = status || fornecedorId || dataInicio || dataFim
+    const hasFilters = status || fornecedorId || dataInicio || dataFim || filtroEspecial
 
     const FilterForm = () => (
         <div className="space-y-4">
+            {/* Filtros Especiais */}
+            <div>
+                <Label>Filtros Rápidos</Label>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                    <Button
+                        variant={filtroEspecial === 'atrasadas' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setFiltroEspecial(filtroEspecial === 'atrasadas' ? '' : 'atrasadas')}
+                        className="text-xs"
+                    >
+                        Atrasadas
+                    </Button>
+                    <Button
+                        variant={filtroEspecial === 'em_andamento' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setFiltroEspecial(filtroEspecial === 'em_andamento' ? '' : 'em_andamento')}
+                        className="text-xs"
+                    >
+                        Em Andamento
+                    </Button>
+                    <Button
+                        variant={filtroEspecial === 'resolvidas' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setFiltroEspecial(filtroEspecial === 'resolvidas' ? '' : 'resolvidas')}
+                        className="text-xs"
+                    >
+                        Resolvidas
+                    </Button>
+                </div>
+            </div>
+
             <div>
                 <Label>Status</Label>
                 <Select value={status} onValueChange={setStatus}>
@@ -280,7 +319,13 @@ function TrocasContent() {
                                                 </TableCell>
                                                 <TableCell>{troca.fornecedor.nome}</TableCell>
                                                 <TableCell>
-                                                    <StatusBadge status={troca.statusAtual} />
+                                                    <div className="flex items-center gap-2">
+                                                        <StatusBadge status={troca.statusAtual} />
+                                                        <AlertBadge
+                                                            prazoAlertalAtual={troca.prazoAlertalAtual}
+                                                            statusAtual={troca.statusAtual}
+                                                        />
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="hidden md:table-cell">
                                                     {formatCurrency(troca.orcamento?.valorTotal)}

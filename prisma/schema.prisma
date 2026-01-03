@@ -52,15 +52,26 @@ model Troca {
   tipoCompensacao TipoCompensacao?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  
+  // Controle de Prazo e Alerta
+  prazoAlertalAtual DateTime?        // Prazo atual para alerta (15 dias iniciais, pode ser prorrogado)
+  alertaAtrasada    Boolean          @default(false) // Flag automática indicando se está atrasada
+  dataFinalizacao   DateTime?        // Data de finalização da troca
+  
+  // Controle Financeiro
+  valorTotal       Decimal          @default(0) @db.Decimal(10, 2) // Valor total da troca
+  valorRecuperado  Decimal          @default(0) @db.Decimal(10, 2) // Valor já recuperado
+  valorPendente    Decimal          @default(0) @db.Decimal(10, 2) // Valor ainda em processo
 
-  itens       ItemDefeito[]
-  orcamento   Orcamento?
-  rascunhoNF  RascunhoNF?
-  nfDevolucao NFDevolucao?
-  destinoItem DestinoItem?
-  reposicao   Reposicao?
-  desconto    Desconto?
-  historico   HistoricoTroca[]
+  itens         ItemDefeito[]
+  orcamento     Orcamento?
+  rascunhoNF    RascunhoNF?
+  nfDevolucao   NFDevolucao?
+  destinoItem   DestinoItem?
+  reposicao     Reposicao?
+  desconto      Desconto?
+  historico     HistoricoTroca[]
+  prorrogacoes  ProrrogacaoPrazo[]
 }
 
 model ItemDefeito {
@@ -146,4 +157,15 @@ model HistoricoTroca {
   valorAntigo String?
   valorNovo   String?
   createdAt   DateTime @default(now())
+}
+
+model ProrrogacaoPrazo {
+  id                  String   @id @default(cuid())
+  trocaId             String
+  troca               Troca    @relation(fields: [trocaId], references: [id], onDelete: Cascade)
+  prazoAnterior       DateTime
+  prazoNovo           DateTime
+  diasAdicionados     Int
+  motivoPersonalizado String?
+  createdAt           DateTime @default(now())
 }
