@@ -75,7 +75,7 @@ export async function atualizarAlertaAtrasada(trocaId: string): Promise<void> {
 
     const alertaAtrasada =
         troca.statusAtual !== 'TROCA_RESOLVIDA' &&
-        troca.prazoAlertalAtual &&
+        !!troca.prazoAlertalAtual &&
         new Date() > new Date(troca.prazoAlertalAtual)
 
     await prisma.troca.update({
